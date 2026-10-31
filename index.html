@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="채널 현황">
+<title>채널 현황</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0d12; --card:#141822; --line:#222838; --text:#f2f4f8; --sub:#8a93a6;
+  --up:#4ade80; --down:#f87171;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif;
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);
+  max-width:760px;margin:0 auto;-webkit-font-smoothing:antialiased}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px}
+.top h1{font-size:18px;font-weight:800}
+.upd{font-size:12px;color:var(--sub)}
+.seg{display:flex;background:var(--card);border-radius:10px;padding:3px;margin-bottom:14px}
+.seg button{flex:1;border:0;background:none;color:var(--sub);font:inherit;font-size:13px;
+  font-weight:500;padding:7px 0;border-radius:8px;cursor:pointer}
+.seg button.on{background:#262c3b;color:var(--text);font-weight:700}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px}
+.tile{background:var(--card);border-radius:16px;padding:14px 14px 16px}
+.tile .k{font-size:12px;color:var(--sub);margin-bottom:6px}
+.tile .v{font-size:24px;font-weight:800;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:13px;font-weight:700;margin-left:3px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ch{background:var(--card);border-radius:16px;padding:16px 16px 14px;display:flex;flex-direction:column;min-width:0}
+.ch .name{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:700;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.ch .views{font-size:30px;font-weight:800;letter-spacing:-.8px;margin-top:10px;font-variant-numeric:tabular-nums}
+.ch .views span{font-size:13px;color:var(--sub);font-weight:500;margin-left:2px}
+.ch .d{font-size:13px;margin-top:2px;font-variant-numeric:tabular-nums}
+.ch .d em{font-style:normal;color:var(--sub);margin-left:4px}
+.ch svg{width:100%;height:64px;margin:12px 0 10px;display:block}
+.ch .foot{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-top:auto}
+.ch .foot b{color:var(--text)}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--sub)}
+.msg{color:var(--sub);text-align:center;padding:48px 0;font-size:14px;line-height:1.7}
+@media (max-width:420px){
+  .tile{padding:12px 10px 14px}.tile .v{font-size:20px}
+  .ch{padding:14px 12px 12px}.ch .views{font-size:24px}
+}
+</style>
+</head>
+<body>
+<div class="top"><h1>채널 현황</h1><div class="upd" id="upd"></div></div>
+<div class="seg" id="seg">
+  <button data-h="24" class="on">24시간</button>
+  <button data-h="168">7일</button>
+  <button data-h="720">30일</button>
+</div>
+<div id="app"><div class="msg">불러오는 중…</div></div>
+
+<script>
+let DATA = null, RANGE = 24;
+try { RANGE = +localStorage.getItem("range") || 24; } catch (e) {}
+
+const fmt = n => {
+  if (n == null) return "-";
+  if (n >= 1e8) return (n / 1e8).toFixed(n >= 1e9 ? 0 : 1).replace(/\.0$/, "") + "억";
+  if (n >= 1e4) return (n / 1e4).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, "") + "만";
+  return n.toLocaleString("ko-KR");
+};
+const sign = n => n == null ? "" : (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n).toLocaleString("ko-KR");
+const cls = n => n > 0 ? "up" : n < 0 ? "down" : "flat";
+const label = h => h === 24 ? "24시간" : h === 168 ? "7일" : "30일";
+
+function kst(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// 기준 시각 이전의 가장 늦은 기록 (없으면 가장 오래된 기록)
+function baseSnap(snaps, h) {
+  const cut = Date.parse(snaps[snaps.length - 1].t) - h * 3600e3;
+  let base = snaps[0];
+  for (const s of snaps) { if (Date.parse(s.t) <= cut) base = s; else break; }
+  return base;
+}
+
+function spark(points, color) {
+  const W = 300, H = 64, P = 3;
+  if (points.length < 2) {
+    return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="0" y1="${H - P}" x2="${W}" y2="${H - P}" stroke="${color}" stroke-width="2.5"/></svg>`;
+  }
+  const t0 = points[0][0], t1 = points[points.length - 1][0];
+  const vs = points.map(p => p[1]);
+  const lo = Math.min(...vs), hi = Math.max(...vs), span = hi - lo || 1;
+  const xy = points.map(([t, v]) => [
+    ((t - t0) / ((t1 - t0) || 1)) * W,
+    H - P - ((v - lo) / span) * (H - P * 2)
+  ]);
+  const line = xy.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+  const id = "g" + color.replace("#", "");
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity=".04"/></linearGradient></defs>
+    <path d="${line}L${W} ${H}L0 ${H}Z" fill="url(#${id})"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+function render() {
+  const app = document.getElementById("app");
+  const snaps = (DATA && DATA.snapshots) || [];
+  if (!snaps.length) { app.innerHTML = '<div class="msg">아직 기록이 없습니다.<br>첫 수집이 끝나면 표시됩니다.</div>'; return; }
+
+  const last = snaps[snaps.length - 1], base = baseSnap(snaps, RANGE);
+  const realH = Math.round((Date.parse(last.t) - Date.parse(base.t)) / 3600e3);
+  const short = realH < RANGE - 1;
+  const lbl = short ? `${realH}시간` : label(RANGE);
+  const cutT = Date.parse(base.t);
+  const inRange = snaps.filter(s => Date.parse(s.t) >= cutT);
+
+  let totV = 0, totS = 0, dV = 0, dS = 0, anyS = false;
+  const cards = DATA.channels.map(ch => {
+    const cur = last.c[ch.handle], old = base.c[ch.handle];
+    if (!cur) return `<div class="ch"><div class="name"><span class="dot" style="background:${ch.color}"></span>${ch.name}</div><div class="msg" style="padding:24px 0">데이터 없음</div></div>`;
+    const dv = old ? cur.v - old.v : null;
+    const ds = old && cur.s != null && old.s != null ? cur.s - old.s : null;
+    totV += cur.v; dV += dv || 0;
+    if (cur.s != null) { totS += cur.s; dS += ds || 0; anyS = true; }
+    const pts = inRange.filter(s => s.c[ch.handle]).map(s => [Date.parse(s.t), s.c[ch.handle].v]);
+    return `<div class="ch">
+      <div class="name"><span class="dot" style="background:${ch.color}"></span>${ch.name}</div>
+      <div class="views">${fmt(cur.v)}<span>회</span></div>
+      <div class="d ${cls(dv)}">${sign(dv)}<em>${lbl}</em></div>
+      ${spark(pts, ch.color)}
+      <div class="foot"><span>구독 <b>${cur.s == null ? "-" : cur.s.toLocaleString("ko-KR")}</b>${ds ? ` <span class="${cls(ds)}">${sign(ds)}</span>` : ""}</span><span>영상 ${cur.n}</span></div>
+    </div>`;
+  }).join("");
+
+  app.innerHTML = `
+    <div class="sum">
+      <div class="tile"><div class="k">${lbl} 조회</div><div class="v ${cls(dV)}">${sign(dV)}</div></div>
+      <div class="tile"><div class="k">구독자</div><div class="v">${anyS ? totS.toLocaleString("ko-KR") : "-"}${dS ? `<small class="${cls(dS)}">${sign(dS)}</small>` : ""}</div></div>
+      <div class="tile"><div class="k">총 조회수</div><div class="v">${fmt(totV)}</div></div>
+    </div>
+    <div class="grid">${cards}</div>`;
+  document.getElementById("upd").textContent = kst(DATA.updated) + " 기준";
+}
+
+document.querySelectorAll("#seg button").forEach(b => {
+  b.classList.toggle("on", +b.dataset.h === RANGE);
+  b.onclick = () => {
+    RANGE = +b.dataset.h;
+    try { localStorage.setItem("range", RANGE); } catch (e) {}
+    document.querySelectorAll("#seg button").forEach(x => x.classList.toggle("on", x === b));
+    render();
+  };
+});
+
+async function load() {
+  try {
+    const r = await fetch("data/history.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    DATA = await r.json();
+    render();
+  } catch (e) {
+    document.getElementById("app").innerHTML = '<div class="msg">아직 기록이 없습니다.<br>첫 수집이 끝나면 표시됩니다.</div>';
+  }
+}
+load();
+setInterval(load, 10 * 60e3);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
