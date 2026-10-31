@@ -1,0 +1,29 @@
+{
+  "groups": [
+    {"key": "don", "name": "돈이 된 사건 쪽"},
+    {"key": "ideuk", "name": "알면 이득 쪽"}
+  ],
+  "channels": [
+    {"id": "UCtiWNy-4iz6l8DOJXi3p-1w", "name": "강민철TV", "group": "don"},
+    {"id": "UCBObm4ouIHoFjNH3InErcNg", "name": "머니시그널", "group": "don"},
+    {"id": "UC4bF4lkmP9ynskkOgSt7iIg", "name": "크립토매거진", "group": "don"},
+    {"id": "UCRv94rUAi0UNA_jSlktZi5g", "name": "비트모빅숏츠세상", "group": "don"},
+    {"id": "UCYBjc9EyfkmX1ELinRay0Gg", "name": "디지털엑스", "group": "don"},
+    {"id": "UCuWNoo47jmzP6UZEbcaVd0g", "name": "루시의 오늘시황", "group": "don"},
+    {"id": "UCWLQLRI9MzaPO7T6Z6KrTgw", "name": "돈쯔", "group": "don"},
+    {"id": "UCWxPw7nVXCXTZYthDGyR4bA", "name": "경제아주머니 장아주", "group": "don"},
+    {"id": "UC39302cPODZv-CQI2_LWfoQ", "name": "김독고", "group": "don"},
+    {"id": "UCgGGm_uK1VmvnZfN8p3nesg", "name": "현대경제학", "group": "don"},
+
+    {"id": "UCt1_daQU-NasHHV1bre3VyQ", "name": "매일경제공부", "group": "ideuk"},
+    {"id": "UC04o9FnnbAW0NLzQo-_y7SQ", "name": "인생백과", "group": "ideuk"},
+    {"id": "UCLCBjG9c2cyNsVfRNBWuRpQ", "name": "zeta", "group": "ideuk"},
+    {"id": "UC7IIB0DGRyWysZ2jMLwhmWQ", "name": "머니대외비", "group": "ideuk"},
+    {"id": "UCYLc8yd3nko6VuBmmNfwZsA", "name": "부에반하다", "group": "ideuk"},
+    {"id": "UCLHtw5ggbwmswcLR7Cmt9iA", "name": "노지나", "group": "ideuk"},
+    {"id": "UC5Vn_ui4Hcvaa1LHpLSy2bg", "name": "미짠_미친짠테커", "group": "ideuk"},
+    {"id": "UCPQaG_7W1uySOZ6as0V6YaQ", "name": "퇴근 후 100만원", "group": "ideuk"},
+    {"id": "UCmCSr4KFtT_-Kj1QGc8uEhw", "name": "셀럽템", "group": "ideuk"},
+    {"id": "UCRXddtKhJogKdUoaEKgWMfw", "name": "숫자로 보는 세계의 반전", "group": "ideuk"}
+  ]
+}

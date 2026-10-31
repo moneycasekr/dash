@@ -51,7 +51,7 @@ body{color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif;
   .ch{padding:14px 12px 12px}.ch .views{font-size:24px}
 }
 /* 영상별 초반 성장 */
-.sec{display:flex;justify-content:space-between;align-items:baseline;margin:26px 0 10px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:2px 8px;margin:26px 0 10px}
 .sec h2{font-size:16px;font-weight:800}
 .sec span{font-size:12px;color:var(--sub)}
 .chips{display:flex;gap:6px;margin-bottom:10px;overflow-x:auto}
@@ -79,6 +79,15 @@ body{color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif;
 .cp .n{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:1px}
 .cp .n.wait{color:#4a5266;font-weight:500}
 .cp .r{font-size:10px;font-weight:700;margin-top:1px}
+/* 경쟁 채널 */
+.rrow{display:block;text-decoration:none;color:inherit;background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.rrow.hot{box-shadow:inset 3px 0 0 #fb923c}
+.rmeta{font-size:12px;color:var(--sub);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.rstat{display:flex;gap:8px;margin-top:8px;align-items:center;flex-wrap:wrap}
+.badge{font-size:12px;font-weight:800;padding:3px 8px;border-radius:7px;background:#262c3b;color:var(--sub)}
+.badge.b2{background:rgba(74,222,128,.14);color:var(--up)}
+.badge.b3{background:rgba(251,146,60,.16);color:#fb923c}
+.rate{font-size:12px;color:var(--sub);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -90,6 +99,7 @@ body{color:var(--text);font-family:"Noto Sans KR",system-ui,sans-serif;
 </div>
 <div id="app"><div class="msg">불러오는 중…</div></div>
 <div id="vsec"></div>
+<div id="rsec"></div>
 
 <script>
 let DATA = null, RANGE = 24;
@@ -306,6 +316,53 @@ function renderVideos() {
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+/* ───── 경쟁 채널 ───── */
+let RDATA = null, RG = null, RSORT = "hot";
+
+function renderRivals() {
+  const box = document.getElementById("rsec");
+  if (!RDATA || !RDATA.groups || !RDATA.groups.length) { box.innerHTML = ""; return; }
+  if (!RG) RG = RDATA.groups[0].key;
+  const C = RDATA.channels || {};
+  let list = Object.entries(RDATA.videos || {}).map(([id, v]) => ({ id, ...v }))
+    .filter(v => C[v.c] && C[v.c].group === RG && v.pts && v.pts.length)
+    .filter(v => v.pts[v.pts.length - 1][0] <= 168);
+  list.forEach(v => {
+    const ch = C[v.c], last = v.pts[v.pts.length - 1];
+    v.age = last[0]; v.views = last[1];
+    const base = v.sec <= 180 ? ch.base_s : ch.base_l;
+    v.ratio = base ? v.views / base : null;
+    const prev = v.pts.length > 1 ? v.pts[v.pts.length - 2] : null;
+    v.rate = prev && last[0] > prev[0] ? Math.round((last[1] - prev[1]) / (last[0] - prev[0])) : null;
+  });
+  list.sort(RSORT === "hot" ? (a, b) => (b.ratio || 0) - (a.ratio || 0) : (a, b) => Date.parse(b.p) - Date.parse(a.p));
+  list = list.slice(0, 20);
+
+  const chips = RDATA.groups.map(g => `<button data-g="${g.key}" class="${g.key === RG ? "on" : ""}">${esc(g.name)}</button>`).join("")
+    + `<button data-s="${RSORT === "hot" ? "new" : "hot"}" style="margin-left:auto">${RSORT === "hot" ? "급등순" : "최신순"} ⇄</button>`;
+
+  const rows = list.map(v => {
+    const ch = C[v.c], r = v.ratio;
+    const b = r == null ? "" : `<span class="badge ${r >= 3 ? "b3" : r >= 1.5 ? "b2" : ""}">평소 ×${r >= 10 ? Math.round(r) : r.toFixed(1)}</span>`;
+    const url = (v.sec <= 180 ? "https://youtube.com/shorts/" : "https://youtu.be/") + v.id;
+    const ageTxt = v.age < 48 ? `${Math.floor(v.age)}시간 전` : `${Math.floor(v.age / 24)}일 전`;
+    return `<a class="rrow ${r >= 3 ? "hot" : ""}" href="${url}" target="_blank" rel="noopener">
+      <div class="vhead"><div class="vt">${esc(v.t || v.id)}</div><div class="vv">${fmt(v.views)}</div></div>
+      <div class="rmeta"><span>${esc(ch.name)}</span><span>· 구독 ${fmt(ch.subs)}</span><span>· ${ageTxt}</span>${v.sec > 180 ? '<span class="tag">롱폼</span>' : ""}</div>
+      <div class="rstat">${b}${v.rate != null && v.rate > 0 ? `<span class="rate">최근 시간당 +${v.rate.toLocaleString("ko-KR")}</span>` : ""}</div>
+    </a>`;
+  }).join("");
+
+  box.innerHTML = `
+    <div class="sec"><h2>경쟁 채널 최근 7일</h2><span>×는 그 채널 평소 조회수 대비</span></div>
+    <div class="chips" id="rchips">${chips}</div>
+    ${rows || '<div class="msg">최근 7일 새 영상이 없거나 아직 수집 전입니다.</div>'}`;
+  box.querySelectorAll("#rchips button").forEach(btn => btn.onclick = () => {
+    if (btn.dataset.s) RSORT = btn.dataset.s; else RG = btn.dataset.g;
+    renderRivals();
+  });
+}
+
 async function load() {
   try {
     const r = await fetch("data/history.json?t=" + Date.now(), { cache: "no-store" });
@@ -320,6 +377,11 @@ async function load() {
     if (r.ok) VDATA = await r.json();
   } catch (e) {}
   renderVideos();
+  try {
+    const r = await fetch("data/rivals.json?t=" + Date.now(), { cache: "no-store" });
+    if (r.ok) RDATA = await r.json();
+  } catch (e) {}
+  renderRivals();
 }
 load();
 setInterval(load, 10 * 60e3);
