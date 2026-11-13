@@ -194,7 +194,7 @@ select.sel{font:inherit;font-size:13px;color:var(--text);background:var(--card);
 const S = { tab: "sum", ch: "all", per: "28", cols: null, vtype: "all", sort: "p", dir: -1, dm: "v", vx: 48, sel: null, rg: null, rsort: "hot" };
 try { Object.assign(S, JSON.parse(localStorage.getItem("dash2") || "{}"), { sel: null }); } catch (e) {}
 const keep = () => { try { localStorage.setItem("dash2", JSON.stringify(S)); } catch (e) {} };
-let H = null, V = null, ST = null, R = null;          // history, videos, studio, rivals
+let H = null, V = null, ST = null, R = null, CFG = null;   // history, videos, studio, rivals, channels.json
 let CH = [], CM = {}, SER = {}, LAST = 0, VID = [];
 
 /* ───────── 표기 ───────── */
@@ -223,7 +223,7 @@ const median = a => { if (!a.length) return null; const s = a.slice().sort((x, y
 
 /* ───────── 공개 숫자(1시간마다) ───────── */
 function prep() {
-  CH = (H && H.channels) || []; CM = Object.fromEntries(CH.map(c => [c.handle, c]));
+  CH = (CFG && CFG.channels) || (H && H.channels) || []; CM = Object.fromEntries(CH.map(c => [c.handle, c]));   // 채널 목록·색은 channels.json 이 먼저
   if (S.ch !== "all" && !CM[S.ch]) S.ch = "all";
   const snaps = (H && H.snapshots) || [];
   LAST = snaps.length ? Date.parse(snaps[snaps.length - 1].t) : 0;
@@ -390,7 +390,7 @@ function renderSum() {
   const lab = (a, full) => fresh.length ? (one1 ? "기록 시작 전" : `새 채널 ${fresh.length}곳은 기록 전`) : a.some(d => !d.full) ? `수집 ${Math.round(Math.min(...a.map(d => d.got)))}시간째 채널 포함` : full;
   const ds7 = sumD(d7, "ds");
   let html = `<div class="sec"><div class="sech"><h2>지금</h2><span class="note">유튜브 공개 숫자 · 1시간마다 · ${LAST ? kst(LAST) : "-"} 기준</span></div><div class="tiles">
-    ${tile("구독자", int(subs), d7.length ? `7일 ${sign(ds7)}` : null, cls(ds7))}
+    ${tile("구독자", hs.some(h => cur(h)) ? int(subs) : "–", d7.length ? `7일 ${sign(ds7)}` : null, cls(ds7))}
     ${tile("최근 24시간 조회", d24.length ? sign(sumD(d24, "dv")) : "–", lab(d24, "어제 이 시각부터"))}
     ${tile("최근 48시간 조회", d48.length ? sign(sumD(d48, "dv")) : "–", lab(d48, "스튜디오 '실시간'과 같은 범위"))}
     ${tile("최근 7일 조회", d7.length ? sign(sumD(d7, "dv")) : "–", lab(d7, `누적 ${short(allV)}회`))}
@@ -704,7 +704,7 @@ function render() {
 }
 async function get(name) { try { const r = await fetch(`data/${name}.json?t=${Date.now()}`, { cache: "no-store" }); return r.ok ? await r.json() : null; } catch (e) { return null; } }
 async function load() {
-  [H, V, ST, R] = await Promise.all([get("history"), get("videos"), get("studio"), get("rivals")]);
+  [H, V, ST, R, CFG] = await Promise.all([get("history"), get("videos"), get("studio"), get("rivals"), get("../channels")]);
   prep(); render(); if (S.sel) renderSheet();
 }
 load();
