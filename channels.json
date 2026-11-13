@@ -1,7 +1,9 @@
 {
   "channels": [
-    {"handle": "@moneycasekr", "name": "돈이 된 사건", "color": "#f5c542"},
-    {"handle": "@almyeonideuk", "name": "알면 이득", "color": "#4ade80"},
-    {"handle": "@issuerush", "name": "이슈러쉬", "color": "#3EE6B5"}
+    {"handle": "@moneycasekr", "id": "UCoHUrEzmw3Tuw_7SssQIgqQ", "short": "don", "name": "돈이 된 사건", "color": "#c98500"},
+    {"handle": "@almyeonideuk", "id": "UCZrAISaUJ3btnVdCV_mhXTg", "short": "ideuk", "name": "알면 이득", "color": "#199e70"},
+    {"handle": "@issuerush", "id": "UC4WAeR0oOAOmUYJDsqo8fUw", "short": "issuerush", "name": "이슈러쉬", "color": "#3987e5"},
+    {"handle": "@quiznote", "id": "UCbvwVoQA59SCKAYy49CaSUw", "short": "quiz", "name": "평생오답노트", "color": "#d55181"},
+    {"handle": "@panreadkr", "id": "UCR7jq2I53CkU22ECalxp2vA", "short": "panread", "name": "판읽기", "color": "#9085e9"}
   ]
 }

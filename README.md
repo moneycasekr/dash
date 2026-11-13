@@ -1,23 +1,31 @@
 # 채널 현황 대시보드
 
-1시간마다 유튜브 채널 숫자를 모아 `data/history.json`에 쌓고, `index.html`이 그걸 보여 줍니다.
+다섯 채널(돈이 된 사건 · 알면 이득 · 이슈러쉬 · 평생오답노트 · 판읽기)을 한 화면에서 본다.
+주소: `https://moneycasekr.github.io/dash/` (휴대폰 공유 버튼 → "홈 화면에 추가")
 
-## 설치 (한 번만)
+## 숫자가 오는 길 두 가지
 
-1. **API 키 발급**: console.cloud.google.com → 새 프로젝트 → "YouTube Data API v3" 사용 설정 → 사용자 인증 정보 → API 키 만들기
-2. **저장소 만들기**: GitHub에서 새 공개 저장소 `dash` 생성 → 이 폴더 파일 전부 업로드 (`.github` 폴더 포함)
-3. **키 넣기**: 저장소 Settings → Secrets and variables → Actions → New repository secret
-   - 이름 `YT_API_KEY`, 값 = 발급한 키
-4. **페이지 켜기**: Settings → Pages → Source "Deploy from a branch", Branch `main` / `(root)` → Save
-5. **첫 수집**: Actions 탭 → stats → Run workflow
-6. 접속: `https://moneycasekr.github.io/dash/` → 휴대폰 공유 버튼 → "홈 화면에 추가"
+| | 무엇 | 어떻게 | 얼마나 자주 |
+|---|---|---|---|
+| 공개 숫자 | 구독자, 조회수, 영상별 조회·좋아요·댓글, 올린 뒤 시간대별 조회수 | GitHub Actions 가 `fetch_stats.py` 실행 → `data/history.json`, `data/videos.json` | 1시간마다 |
+| 스튜디오 숫자 | 계속 시청함, 평균 조회율, 유효 조회, 시청 시간, 구독 증감, 노출·클릭률, 유입 경로, 수익 조건 | Claude 가 스튜디오 화면을 읽음 → `studio/merge.py` → `data/studio.json` (`studio/수집_절차.md`) | 받을 때마다(스튜디오 집계가 이틀쯤 늦음) |
+| 경쟁 채널 | 경쟁 채널 새 영상·급등 | `fetch_rivals.py` → `data/rivals.json` | 1시간마다 |
+
+## 화면
+- 맨 위 채널 단추: 전체 / 채널 하나. 고르면 아래 모든 내용이 그 채널 것으로 바뀐다.
+- 요약: 지금(공개 숫자) → 스튜디오 지표(7일·28일·전체) → 채널 비교 표 → 날짜별 그림 → 수익 창출 조건 → 유입 경로
+- 영상: 모든 영상 표. 열 이름을 누르면 정렬, 영상을 누르면 상세(초반 성장 그림 포함)
+- 경쟁 채널: 최근 7일 새 영상, 급등순·최신순
 
 ## 채널 추가·변경
+`channels.json` 에 한 줄 추가: `handle`(데이터 열쇠), `id`(채널 ID), `short`(스튜디오 표 파일 이름 앞머리), `name`, `color`.
 
-`channels.json`에 한 줄 추가 (`handle`은 @핸들, `color`는 점·그래프 색).
+## 처음 설치했을 때 한 일 (참고)
+- 구글 클라우드에서 "YouTube Data API v3" API 키 발급 → 저장소 Settings → Secrets → `YT_API_KEY`
+- Settings → Pages → Branch `main` / `(root)`
 
 ## 참고
-
-- 유튜브 공개 수치라 구독자는 반올림되고 조회수는 몇 시간 늦게 반영될 수 있음
-- 기록은 30일치만 보관
+- 공개 숫자라 구독자는 1,000명부터 반올림되고 조회수는 몇 시간 늦게 반영될 수 있음
+- 채널 기록은 최근 35일은 1시간 간격, 그 전은 하루 1개로 줄여 800일 보관
+- 영상별 시간대 기록은 올린 뒤 7일까지 1시간 간격, 그 뒤는 하루 1개
 - 정각 실행은 GitHub 사정으로 몇 분~수십 분 늦을 수 있음

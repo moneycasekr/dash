@@ -1,6 +1,9 @@
 """유튜브 채널 통계 수집 — GitHub Actions가 1시간마다 실행.
-- data/history.json : 채널 전체 숫자 (조회·구독·영상 수)
-- data/videos.json  : 영상별 업로드 후 시간대별 조회수 (초반 성장 곡선)
+- data/history.json : 채널 전체 숫자 (조회·구독·영상 수). 최근 35일은 1시간 간격, 그 전은 하루 1개.
+- data/videos.json  : 채널의 모든 공개 영상. 지금 조회수·좋아요·댓글 + 업로드 후 시간대별 조회수
+                      (7일까지 1시간 간격, 그 뒤는 하루 1개).
+
+channels.json 의 handle 은 데이터 열쇠로 쓰인다(id 가 있으면 그 id 로 조회하므로 실제 @핸들과 달라도 됨).
 """
 import datetime
 import json
@@ -13,10 +16,13 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(ROOT, "channels.json")
 OUT = os.path.join(ROOT, "data", "history.json")
 VOUT = os.path.join(ROOT, "data", "videos.json")
-KEEP_DAYS = 30          # 채널 기록 보관
-TRACK_HOURS = 168       # 영상은 업로드 후 7일까지 매시간 기록
-VKEEP_DAYS = 90         # 영상 기록 보관
-KEY = os.environ["YT_API_KEY"]
+HOURLY_DAYS = 35        # 채널 기록: 이 기간은 1시간 간격 그대로
+KEEP_DAYS = 800         # 채널 기록: 그 전은 하루 1개로 줄여 이만큼 보관
+TRACK_HOURS = 168       # 영상: 업로드 후 7일까지 매시간 기록
+SLOW_GAP_HOURS = 23     # 영상: 7일 뒤에는 이 간격(약 하루)으로 기록
+MAX_PAGES = 10          # 채널당 업로드 목록 최대 500개
+KST = datetime.timezone(datetime.timedelta(hours=9))
+KEY = os.environ.get("YT_API_KEY", "")
 
 
 def api(endpoint, params):
@@ -39,6 +45,10 @@ def save(path, obj):
         json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
+def parse(ts):
+    return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
 def iso_seconds(dur):
     m = re.fullmatch(r"P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", dur or "")
     if not m:
@@ -47,45 +57,75 @@ def iso_seconds(dur):
     return d * 86400 + h * 3600 + mi * 60 + s
 
 
+def thin_snapshots(snaps, now):
+    """최근 HOURLY_DAYS 일은 그대로, 그 전은 한국 날짜마다 마지막 기록 1개만 남긴다."""
+    hourly_cut = now - datetime.timedelta(days=HOURLY_DAYS)
+    keep_cut = now - datetime.timedelta(days=KEEP_DAYS)
+    old_by_day, recent = {}, []
+    for s in snaps:
+        t = parse(s["t"])
+        if t < keep_cut:
+            continue
+        if t >= hourly_cut:
+            recent.append(s)
+        else:
+            old_by_day[t.astimezone(KST).date()] = s   # 같은 날이면 뒤의 것이 덮어씀
+    return [old_by_day[d] for d in sorted(old_by_day)] + recent
+
+
+def upload_ids(cid):
+    """채널 업로드 목록 전체(공개 영상)의 영상 ID."""
+    ids, token = [], None
+    for _ in range(MAX_PAGES):
+        params = {"part": "contentDetails", "playlistId": "UU" + cid[2:], "maxResults": 50}
+        if token:
+            params["pageToken"] = token
+        res = api("playlistItems", params)
+        ids += [it["contentDetails"]["videoId"] for it in res.get("items", [])]
+        token = res.get("nextPageToken")
+        if not token:
+            break
+    return ids
+
+
 def track_videos(cfg, hist, now):
-    """채널별 업로드 목록에서 최근 7일 영상을 골라 현재 조회수를 기록."""
     vids = load(VOUT, {"videos": {}})
     V = vids["videos"]
-    cut = now - datetime.timedelta(hours=TRACK_HOURS)
+    stamp = now.isoformat(timespec="seconds")
 
-    targets = {}
+    owner = {}
     for c in cfg["channels"]:
         cid = hist["ids"].get(c["handle"])
         if not cid:
             continue
-        res = api("playlistItems", {"part": "contentDetails", "playlistId": "UU" + cid[2:], "maxResults": 15})
-        for it in res.get("items", []):
-            vid = it["contentDetails"]["videoId"]
-            pub = it["contentDetails"].get("videoPublishedAt")
-            if pub and datetime.datetime.fromisoformat(pub.replace("Z", "+00:00")) >= cut:
-                targets[vid] = c["handle"]
+        try:
+            for vid in upload_ids(cid):
+                owner[vid] = c["handle"]
+        except Exception as e:
+            print("업로드 목록 실패:", c["handle"], e)
 
-    ids = list(targets)
+    ids = list(owner)
     for i in range(0, len(ids), 50):
         res = api("videos", {"part": "snippet,statistics,contentDetails", "id": ",".join(ids[i:i + 50])})
         for it in res.get("items", []):
             vid = it["id"]
-            pub = datetime.datetime.fromisoformat(it["snippet"]["publishedAt"].replace("Z", "+00:00"))
+            pub = parse(it["snippet"]["publishedAt"])
             age = round((now - pub).total_seconds() / 3600, 2)
             st = it["statistics"]
-            rec = V.setdefault(vid, {"ch": targets[vid], "p": it["snippet"]["publishedAt"], "pts": []})
+            views = int(st.get("viewCount", 0))
+            rec = V.setdefault(vid, {"ch": owner[vid], "p": it["snippet"]["publishedAt"], "pts": []})
+            rec["ch"] = owner[vid]
             rec["title"] = it["snippet"]["title"]
             rec["sec"] = iso_seconds(it["contentDetails"].get("duration"))
             rec["likes"] = int(st.get("likeCount", 0))
             rec["cm"] = int(st.get("commentCount", 0))
-            rec["pts"].append([age, int(st.get("viewCount", 0))])
+            rec["v"] = views
+            rec["seen"] = stamp          # 이번 수집에서 보인 영상 (지워졌거나 비공개가 되면 옛 시각으로 남음)
+            pts = rec["pts"]
+            if age <= TRACK_HOURS or not pts or age - pts[-1][0] >= SLOW_GAP_HOURS:
+                pts.append([age, views])
 
-    vcut = now - datetime.timedelta(days=VKEEP_DAYS)
-    vids["videos"] = {
-        k: v for k, v in V.items()
-        if datetime.datetime.fromisoformat(v["p"].replace("Z", "+00:00")) >= vcut
-    }
-    vids["updated"] = now.isoformat(timespec="seconds")
+    vids["updated"] = stamp
     save(VOUT, vids)
     print("영상 기록:", len(ids), "개")
 
@@ -94,7 +134,7 @@ def main():
     cfg = load(CFG, {"channels": []})
     hist = load(OUT, {"ids": {}, "snapshots": []})
 
-    # @핸들 → 채널 ID (한 번만 조회 후 저장)
+    # 채널 ID: channels.json 에 id 가 있으면 그대로, 없으면 @핸들로 한 번만 조회
     for ch in cfg["channels"]:
         k = ch["handle"]
         if ch.get("id"):
@@ -125,12 +165,10 @@ def main():
 
     now = datetime.datetime.now(datetime.timezone.utc)
     hist["snapshots"].append({"t": now.isoformat(timespec="seconds"), "c": stats})
-    cut = now - datetime.timedelta(days=KEEP_DAYS)
-    hist["snapshots"] = [
-        s for s in hist["snapshots"] if datetime.datetime.fromisoformat(s["t"]) >= cut
-    ]
+    hist["snapshots"] = thin_snapshots(hist["snapshots"], now)
     hist["channels"] = [
-        {"handle": c["handle"], "name": c.get("name") or titles.get(c["handle"], c["handle"]), "color": c["color"]}
+        {"handle": c["handle"], "id": hist["ids"].get(c["handle"]), "short": c.get("short"),
+         "name": c.get("name") or titles.get(c["handle"], c["handle"]), "color": c["color"]}
         for c in cfg["channels"]
     ]
     hist["updated"] = now.isoformat(timespec="seconds")
