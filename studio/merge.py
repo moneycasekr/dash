@@ -19,6 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 RAW = os.path.join(HERE, "raw")
 OUT = os.path.join(ROOT, "data", "studio.json")
+MAX_AGE_H = 12          # 이보다 오래된 raw 파일은 '이번에 못 받은 것'으로 보고 합치지 않는다
 
 COLS = {
     "조회수": "v", "유효 조회수": "ev", "시청 시간(단위: 시간)": "wh", "평균 시청 지속 시간": "awt",
@@ -58,6 +59,10 @@ def day(s):
 def read(short, kind):
     p = os.path.join(RAW, f"{short}_{kind}.json")
     if not os.path.exists(p):
+        return None
+    age_h = (datetime.datetime.now().timestamp() - os.path.getmtime(p)) / 3600
+    if age_h > MAX_AGE_H:
+        print(f"  ! {short}_{kind}: {age_h:.0f}시간 전에 받은 파일이라 건너뜀(이번에 못 받음)")
         return None
     with open(p, encoding="utf-8") as f:
         d = json.load(f)
