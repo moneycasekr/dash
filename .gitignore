@@ -1,2 +1,6 @@
 studio/raw/
 __pycache__/
+longform/*/out.mp4
+longform/*/stills/
+longform/*/audio/*.mp3
+longform/*/_*
